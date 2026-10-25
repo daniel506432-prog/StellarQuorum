@@ -99,6 +99,17 @@ Covers `proposal_created`, `vote_cast`, `proposal_finalized`,
 
 ## Python read-only bindings
 
+## Command-line governance tool
+
+The `sdk/cli` package provides `@quorum/cli` commands for testnet, futurenet,
+mainnet, or a custom RPC. Set `QUORUM_GOVERNANCE_CONTRACT_ID` and
+`QUORUM_SECRET_KEY`, then run `npx @quorum/cli propose --title "..."
+--description "..."`, `vote --id 1 --support 1`, `finalize --id 1`,
+`execute --id 1`, or `get --id 1`. Use `--network custom --rpc-url ...
+--network-passphrase ...` for a private network. The secret key is read only
+for local signing and this CLI is not a mainnet custody solution; use a secure
+wallet or signer for production funds.
+
 Python services can install the governance query package from source. See
 [the Python SDK README](python/README.md) for installation, typed result
 shapes, and examples of `get_proposal`, `get_all_proposals`, `get_config`,

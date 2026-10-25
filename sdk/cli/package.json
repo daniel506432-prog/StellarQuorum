@@ -1,0 +1,8 @@
+{
+  "name": "@quorum/cli",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "bin": { "quorum": "dist/index.js" },
+  "dependencies": { "@quorum/sdk": "../", "@stellar/stellar-sdk": "~17.1.0" }
+}
