@@ -174,6 +174,54 @@ export type QuorumEvent =
 export interface RawContractEvent {
   topic: xdr.ScVal[];
   value: xdr.ScVal;
+  paging_token?: string;
+  ledger?: number;
+}
+
+export interface EventSubscriptionOptions {
+  pollIntervalMs?: number;
+  signal?: AbortSignal;
+}
+
+export type EventSubscriptionFilters = Record<string, unknown>;
+export type EventSource = {
+  getEvents(request: Record<string, unknown>): Promise<{ events?: RawContractEvent[] }>;
+};
+
+/**
+ * Polls an RPC event source and delivers each decodable event once.
+ *
+ * @example
+ * const stop = subscribeToEvents(server, { filters: [{ type: 'contract' }] }, event => console.log(event));
+ * // later: stop();
+ */
+export function subscribeToEvents(
+  source: EventSource,
+  filters: EventSubscriptionFilters,
+  onEvent: (event: QuorumEvent) => void,
+  options: EventSubscriptionOptions = {},
+): () => void {
+  const intervalMs = Math.max(250, options.pollIntervalMs ?? 5_000);
+  let cursor: string | undefined;
+  let stopped = false;
+  const delivered = new Set<string>();
+  const poll = async () => {
+    if (stopped) return;
+    const response = await source.getEvents({ ...filters, ...(cursor ? { cursor } : {}) });
+    for (const raw of response.events ?? []) {
+      const key = raw.paging_token ?? `${raw.ledger ?? ''}:${JSON.stringify(raw.topic)}:${JSON.stringify(raw.value)}`;
+      if (delivered.has(key)) continue;
+      delivered.add(key);
+      const decoded = decodeEvent(raw);
+      if (decoded) onEvent(decoded);
+      if (raw.paging_token) cursor = raw.paging_token;
+    }
+  };
+  const timer = setInterval(() => { void poll().catch(() => undefined); }, intervalMs);
+  void poll().catch(() => undefined);
+  const unsubscribe = () => { stopped = true; clearInterval(timer); };
+  options.signal?.addEventListener('abort', unsubscribe, { once: true });
+  return unsubscribe;
 }
 
 /** A known topic whose value could not be decoded. Unknown topics never throw. */

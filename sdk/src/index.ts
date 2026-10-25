@@ -1,6 +1,6 @@
 export { QuorumClient, TESTNET, MAINNET, ProposalStatusTimeoutError } from './client.js';
 export { GovernanceError, TokenError, RpcTimeoutError, TransactionFailedError, contractErrorCode, parseGovernanceError, parseTokenError } from './errors.js';
-export { EVENT_TOPICS, EventDecodeError, decodeEvent, decodeEvents } from './events.js';
+export { EVENT_TOPICS, EventDecodeError, decodeEvent, decodeEvents, subscribeToEvents } from './events.js';
 export type {
   AdminTransferredEvent,
   ApproveEvent,
@@ -17,6 +17,9 @@ export type {
   QuorumEvent,
   QuorumEventType,
   RawContractEvent,
+  EventSource,
+  EventSubscriptionFilters,
+  EventSubscriptionOptions,
   TransferEvent,
   VoteCastEvent,
 } from './events.js';
