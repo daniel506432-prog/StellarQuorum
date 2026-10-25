@@ -186,6 +186,8 @@ jobs:
       - name: Lint
         run: cd sdk && npm run lint
       - run: cd sdk && npm run build
+      - name: SDK bundle size budget
+        run: cd sdk && node scripts/check-bundle-size.mjs
       # Issue #275: fails when spec/quorum-client.spec.json no longer matches
       # QuorumClient's public methods or the error enums, or when the README
       # documents a client method the spec does not list.

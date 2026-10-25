@@ -1,5 +1,10 @@
 # @quorum/sdk
 
+The CI bundle budget checks the minified ESM entry points after gzip: the root
+entry is capped at 25 KiB and the optional `freighter` entry at 35 KiB. The
+separate budget keeps wallet-only dependencies from leaking into Node users'
+initial bundle.
+
 TypeScript SDK for the Quorum governance protocol on Stellar/Soroban: read
 proposals and config through `QuorumClient`, build transactions, sign them
 with Freighter, and decode the events both contracts emit.
