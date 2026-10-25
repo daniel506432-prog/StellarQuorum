@@ -131,6 +131,8 @@ function mapGovernanceSimulationError(method: string, raw: unknown): Error {
 
 export class QuorumClient {
   private server: rpc.Server;
+  private readonly servers: rpc.Server[];
+  private serverIndex = 0;
   private governance: Contract;
   private token: Contract | null;
   private config: QuorumClientConfig;
@@ -143,15 +145,18 @@ export class QuorumClient {
     if (config.batchSimulation) {
       this.batcher = new SimulationBatcher(
         transactions => this.read('batch simulate', () => postSimulationBatch(
-          config.rpcUrl, transactions, config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+          (config.rpcUrls?.[0] ?? (Array.isArray(config.rpcUrl) ? config.rpcUrl[0] : config.rpcUrl)), transactions, config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
         )),
         config.simulationBatchSize ?? DEFAULT_PAGE_SIZE,
       );
     }
-    this.server = new rpc.Server(config.rpcUrl, {
-      allowHttp: allowsInsecureRpc(config.rpcUrl),
+    const configuredUrls = config.rpcUrls ?? (Array.isArray(config.rpcUrl) ? config.rpcUrl : [config.rpcUrl]);
+    if (configuredUrls.length === 0) throw new Error('At least one RPC URL is required');
+    this.servers = configuredUrls.map(url => new rpc.Server(url, {
+      allowHttp: allowsInsecureRpc(url),
       timeout: config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-    });
+    }));
+    this.server = this.servers[0];
     this.governance = new Contract(config.governanceContractId);
     // tokenContractId is required by the config type but older callers
     // (e.g. bench RPC mode) only pass a governance id — stay usable and fail
@@ -436,26 +441,26 @@ export class QuorumClient {
   private async read<T>(operation: string, request: () => Promise<T>): Promise<T> {
     const attempts = (this.config.readRetryAttempts ?? DEFAULT_READ_RETRY_ATTEMPTS) + 1;
     let lastError: unknown;
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      try {
-        return await this.withTimeout(operation, request());
-      } catch (error) {
-        lastError = isTimeoutError(error)
-          ? new RpcTimeoutError(operation, this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS)
-          : error;
-        if (lastError instanceof RpcTimeoutError || !isTransientRpcError(error) || attempt === attempts - 1) throw lastError;
-        const base = this.config.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
-        const jitter = this.config.retryJitterMs ?? DEFAULT_RETRY_JITTER_MS;
-        // Issue #333: false positive. This Math.random only spreads out retry
-        // timing so concurrent clients do not synchronize; it never generates
-        // a key, nonce or token, so the quality of the randomness is
-        // irrelevant to security. See docs/static-analysis.md.
-        await delay(base * 2 ** attempt + Math.floor(Math.random() * (jitter + 1))); // nosemgrep
+    for (let endpoint = 0; endpoint < this.servers.length; endpoint += 1) {
+      this.server = this.servers[(this.serverIndex + endpoint) % this.servers.length];
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          const result = await this.withTimeout(operation, request());
+          this.serverIndex = (this.serverIndex + endpoint) % this.servers.length;
+          return result;
+        } catch (error) {
+          lastError = isTimeoutError(error)
+            ? new RpcTimeoutError(operation, this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS)
+            : error;
+          if (!isTransientRpcError(error) || attempt === attempts - 1) break;
+          const base = this.config.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
+          const jitter = this.config.retryJitterMs ?? DEFAULT_RETRY_JITTER_MS;
+          await delay(base * 2 ** attempt + Math.floor(Math.random() * (jitter + 1))); // nosemgrep
+        }
       }
     }
     throw lastError;
   }
-
   private async withTimeout<T>(operation: string, promise: Promise<T>): Promise<T> {
     const timeoutMs = this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     let timer: ReturnType<typeof setTimeout> | undefined;

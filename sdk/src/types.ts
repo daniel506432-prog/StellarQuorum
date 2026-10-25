@@ -30,7 +30,10 @@ export interface GovernanceConfig {
 }
 
 export interface QuorumClientConfig {
-  rpcUrl: string;
+  /** A single endpoint (legacy) or an ordered failover list. */
+  rpcUrl: string | string[];
+  /** Alias for rpcUrl when multiple providers are configured. */
+  rpcUrls?: string[];
   networkPassphrase: string;
   governanceContractId: string;
   tokenContractId?: string;
